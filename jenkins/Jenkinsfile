@@ -1,0 +1,44 @@
+pipeline {
+    agent any
+
+    environment {
+        FRONTEND_IMAGE         = 'samikshav/full-stack-app-frontend:latest'
+        BACKEND_IMAGE          = 'samikshav/full-stack-app-backend:latest'
+        DOCKER_CREDENTIALS_ID  = 'dockerhub-creds' // Replace this with the actual ID of your Jenkins credentials (type: username/password)
+    }
+
+    stages {
+        stage('Clone Repo') {
+            steps {
+                git 'https://github.com/Samiksha998/project.git'
+            }
+        }
+
+        stage('Build and Push Docker Images') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: "${DOCKER_CREDENTIALS_ID}", 
+                    usernameVariable: 'DOCKER_USER', 
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh """
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+                    cd docker/frontend
+                    docker build -t $FRONTEND_IMAGE .
+                    docker push $FRONTEND_IMAGE
+                    cd ../../docker/backend
+                    docker build -t $BACKEND_IMAGE .
+                    docker push $BACKEND_IMAGE
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh 'kubectl apply -f k8s-manifests/'
+            }
+        }
+    }
+}
